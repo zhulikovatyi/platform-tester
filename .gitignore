@@ -138,3 +138,5 @@ ENV/
 
 cookie-*
 *.iml
+task_plan.json
+credentials

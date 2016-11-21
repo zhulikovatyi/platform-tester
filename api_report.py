@@ -6,6 +6,7 @@ import pickle
 import asyncio
 import json
 import argparse
+import aiohttp
 
 # ReportWS method params
 # "pfParams": {"reportName": "testReport",
@@ -24,11 +25,15 @@ class Tester:
     host = None
     port = None
     app_url = None
+    task_plan_file = None
+    task_specification = None
 
     def __init__(self, args):
         self.clear_cache = args.clear
         self.host = args.host
         self.port = args.port
+        self.task_plan_file = args.task_plan
+        self.task_specification = json.loads(open(self.task_plan_file).read())
         self.app_url = "http://" + self.host + ":" + self.port
 
     @staticmethod
@@ -41,16 +46,23 @@ class Tester:
         with open(filename, 'rb') as f:
             return pickle.load(f)
 
-    @staticmethod
-    async def future_fetch__operation(s, url, params):
-        return s.post(url, json.dumps(params))
+    async def future_fetch__operation(self, s, username, password, url, params):
+        response = s.post(url, json.dumps(params))
+        if response.status_code == 401:
+            await asyncio.wait([self.login(username, password)])
+            s.cookies = await self.load_cookies('cookie-' + username)
+            response = s.post(url, json.dumps(params))
+        print(response.content)
+        return response
 
     async def login(self, username, password):
         s = requests.Session()
         s.cookies = await self.load_cookies('cookie-' + username)
         s.headers["Content-Type"] = "application/json"
         login_data = {"username": username, "password": password}
-        response = await asyncio.wait([self.future_fetch__operation(s, self.app_url + "/webmvc/api/auth", login_data)])
+        print(self.app_url + "/webmvc/api/auth")
+        response = await asyncio.wait([self.future_fetch__operation(s, username, password,
+                                                                    self.app_url + "/webmvc/api/auth", login_data)])
         await self.save_cookies(s.cookies, 'cookie-' + username)
         return response
 
@@ -62,31 +74,22 @@ class Tester:
         else:
             return False
 
-    async def report(self, username):
-        dest_api_call = "/webmvc/api/pageflow/fabulous/reportFile"
-        print("Call " + dest_api_call + " by user '" + username + "'")
+    async def task(self, username, password, url, count):
+        print("Call " + url + " by user '" + username + "'")
         request_data = {"operation": "START"}
         s = requests.Session()
         s.cookies = await self.load_cookies('cookie-' + username)
         s.headers["Content-Type"] = "application/json"
-        future_set, _ = await asyncio.wait([self.future_fetch__operation(s, self.app_url + dest_api_call,
-                                                request_data)])
-        response = list(future_set)[0].result()
-        await self.save_cookies(s.cookies, 'cookie-' + username)
-        print("Response from " + dest_api_call + "for user '" + username + "'\n" + response.text)
-        return response
+        for i in range(0, count):
+            await asyncio.wait([self.future_fetch__operation(s, username, password, self.app_url + url, request_data)])
 
     async def task_for_user(self, username, password):
         print("Start task for the user '" + username + "'")
         await asyncio.wait([self.create_cookie_file_if_need(username)])
-        future_set, _ = await asyncio.wait([self.report(username)])
-        response = list(future_set)[0].result()
-        if response.status_code == 401:
-            print("Status = 401")
-            await asyncio.wait([self.login(username, password)])
-            future_set, _ = await asyncio.wait([self.report(username)])
-            response = list(future_set)[0].result()
-            print(response)
+        await asyncio.wait([
+            self.task(username, password, t[0], t[1]) for t in [(line['url'], line['requestCount'])
+                                                      for line in self.task_specification]
+        ])
 
     async def make_test(self):
         if self.clear_cache:
@@ -103,6 +106,7 @@ def main():
     parser.add_argument('-c', dest='clear', action='store_true')
     parser.add_argument('--host', dest='host')
     parser.add_argument('--port', dest='port')
+    parser.add_argument("--task-plan", dest='task_plan')
     loop = asyncio.get_event_loop()
     tester = Tester(parser.parse_args())
     loop.run_until_complete(tester.make_test())

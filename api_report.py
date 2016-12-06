@@ -8,17 +8,6 @@ import json
 import argparse
 import aiohttp
 
-# ReportWS method params
-# "pfParams": {"reportName": "testReport",
-#              "templateName": "REPORTS/ShapesReport",
-#              "project": "fabulous",
-#              "saveFile": "REPORT", "REPORTFORMATS": "pdf,rtf",
-#              "reportParams": {
-#                  "reportName": "notTestreport",
-#                  "templateName": "REPORTS/ShapesReport"
-#              }}
-
-
 class Tester:
 
     clear_cache = None
@@ -46,22 +35,24 @@ class Tester:
         with open(filename, 'rb') as f:
             return pickle.load(f)
 
-    async def future_fetch__operation(self, s, username, password, url, params):
+    async def future_fetch__operation(self, s, username, password, auth_method, url, params):
         response = s.post(url, json.dumps(params))
+        print(username + " : " + url)
         if response.status_code == 401:
-            await asyncio.wait([self.login(username, password)])
+            print(response.content)
+            await asyncio.wait([self.login(username, password, auth_method)])
             s.cookies = await self.load_cookies('cookie-' + username)
             response = s.post(url, json.dumps(params))
         print(response.content)
         return response
 
-    async def login(self, username, password):
+    async def login(self, username, password, auth_method):
         s = requests.Session()
         s.cookies = await self.load_cookies('cookie-' + username)
         s.headers["Content-Type"] = "application/json"
-        login_data = {"username": username, "password": password}
+        login_data = {"username": username, "password": password, "authMethod": auth_method}
         print(self.app_url + "/webmvc/api/auth")
-        response = await asyncio.wait([self.future_fetch__operation(s, username, password,
+        response = await asyncio.wait([self.future_fetch__operation(s, username, password, auth_method,
                                                                     self.app_url + "/webmvc/api/auth", login_data)])
         await self.save_cookies(s.cookies, 'cookie-' + username)
         return response
@@ -74,30 +65,34 @@ class Tester:
         else:
             return False
 
-    async def task(self, username, password, url, count):
+    async def task(self, username, password, auth_method, url, params, count):
         print("Call " + url + " by user '" + username + "'")
-        request_data = {"operation": "START"}
         s = requests.Session()
         s.cookies = await self.load_cookies('cookie-' + username)
         s.headers["Content-Type"] = "application/json"
-        for i in range(0, count):
-            await asyncio.wait([self.future_fetch__operation(s, username, password, self.app_url + url, request_data)])
+        for i in range(count):
+            await asyncio.wait(
+                [self.future_fetch__operation(s, username, password, auth_method, self.app_url + url, params)]
+            )
 
-    async def task_for_user(self, username, password):
+    async def task_for_user(self, username, password, auth_method):
         print("Start task for the user '" + username + "'")
         await asyncio.wait([self.create_cookie_file_if_need(username)])
         await asyncio.wait([
-            self.task(username, password, t[0], t[1]) for t in [(line['url'], line['requestCount'])
+            self.task(username, password, auth_method, t[0], t[1], t[2])
+            for t in [(line['url'], line['params'], line['requestCount'])
                                                       for line in self.task_specification]
         ])
 
     async def make_test(self):
         if self.clear_cache:
             print("Start clean cache")
-            requests.get(self.app_url + "/_clear")
+            requests.get(self.app_url + "/webmvc/_clear")
             print("Finish clean cache")
         await asyncio.wait([
-            self.task_for_user(line.strip().split(":")[0], line.strip().split(":")[1]) for line in sys.stdin
+            self.task_for_user(
+                line.strip().split(":")[0], line.strip().split(":")[1], line.strip().split(":")[2]
+            ) for line in sys.stdin
         ])
 
 

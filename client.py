@@ -35,15 +35,32 @@ class Tester:
         with open(filename, 'rb') as f:
             return pickle.load(f)
 
-    async def future_fetch__operation(self, s, username, password, auth_method, url, params):
-        response = s.post(url, json.dumps(params))
+    async def future_fetch__operation(self, s, username, password, auth_method, url, params, files):
+        if files is not None:
+            fls = dict()
+            i = 0
+            for f in files:
+                fls['file_' + str(++i)] = open(f, 'rb')
+            del s.headers["Content-Type"]
+            response = s.post(url, data=params, files=fls)
+        else:
+            response = s.post(url, json.dumps(params)) if params is not None else s.get(url)
         print(username + " : " + url)
         if response.status_code == 401:
             print(response.content)
             await asyncio.wait([self.login(username, password, auth_method)])
             s.cookies = await self.load_cookies('cookie-' + username)
-            response = s.post(url, json.dumps(params))
-        print(response.content)
+            if files is not None:
+                fls = dict()
+                i = 0
+                for f in files:
+                    fls['file_' + str(++i)] = open(f, 'rb')
+                if "Content-Type" in s.headers:
+                    del s.headers["Content-Type"]
+                response = s.post(url, data=params, files=fls)
+            else:
+                response = s.post(url, json.dumps(params)) if params is not None else s.get(url)
+        print(response.status_code, response.content)
         return response
 
     async def login(self, username, password, auth_method):
@@ -53,7 +70,7 @@ class Tester:
         login_data = {"username": username, "password": password, "authMethod": auth_method}
         print(self.app_url + "/webmvc/api/auth")
         response = await asyncio.wait([self.future_fetch__operation(s, username, password, auth_method,
-                                                                    self.app_url + "/webmvc/api/auth", login_data)])
+                                                                    self.app_url + "/webmvc/api/auth", login_data, None)])
         await self.save_cookies(s.cookies, 'cookie-' + username)
         return response
 
@@ -65,22 +82,23 @@ class Tester:
         else:
             return False
 
-    async def task(self, username, password, auth_method, url, params, count):
+    async def task(self, username, password, auth_method, url, params, files, count):
         print("Call " + url + " by user '" + username + "'")
         s = requests.Session()
         s.cookies = await self.load_cookies('cookie-' + username)
         s.headers["Content-Type"] = "application/json"
         for i in range(count):
             await asyncio.wait(
-                [self.future_fetch__operation(s, username, password, auth_method, self.app_url + url, params)]
+                [self.future_fetch__operation(s, username, password, auth_method, self.app_url + url, params, files)]
             )
 
     async def task_for_user(self, username, password, auth_method):
         print("Start task for the user '" + username + "'")
         await asyncio.wait([self.create_cookie_file_if_need(username)])
         await asyncio.wait([
-            self.task(username, password, auth_method, t[0], t[1], t[2])
-            for t in [(line['url'], line['params'], line['requestCount'])
+            self.task(username, password, auth_method, t[0], t[1], t[2], t[3])
+            for t in [(line['url'], line['params'] if 'params' in line else None,
+                       line['files'] if 'files' in line else None, line['requestCount'])
                                                       for line in self.task_specification]
         ])
 

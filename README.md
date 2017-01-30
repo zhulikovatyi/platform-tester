@@ -4,8 +4,8 @@ client.py make requests to the webmvc API by multiple user session.
 
 ### How to run
 ```bash
-cat credentials | python client.py -c --host=<server-host> --port=<server-port>
-// ex: cat credentials | python client.py -c --host=172.17.0.2 --port=8330
+cat credentials | python client.py -c --host=<server-host> --port=<server-port> --task-plan=<task_plan_json_file>
+// ex: cat credentials | python client.py -c --host=172.17.0.2 --port=8330 --task-plan=task_plan.json
 ```
 
 Minimal python version is 3.5

@@ -82,6 +82,7 @@ in the '$' character.  This string will be compiled to appropriate value by the 
 property of the response object (byte object will be converted to dict)
 * **['instanceId']** references to the dict item that was parsed from the previous response content. 
 Eg. the previous response content looks like that 
+
 ```json
 {
   "instanceId":"9b2af428-873a-4096-9439-3673fb07ac66",

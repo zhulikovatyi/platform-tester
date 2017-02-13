@@ -7,6 +7,7 @@ import asyncio
 import json
 import argparse
 import re
+from termcolor import colored
 
 
 class Tester:
@@ -60,7 +61,8 @@ class Tester:
             json_str = await self.compile_parametrized_string(json.dumps(params))
             response = s.post(url, json_str) if params is not None else s.get(url)
         if response.status_code == 401:
-            print("Invalid session detected", response.content)
+            print(colored("Invalid session detected", "red", None, attrs=["bold"]),
+                  colored(response.content, "red", None, attrs=["bold"]))
             await asyncio.wait([self.login(username, password, auth_method)])
             s.cookies = await self.load_cookies('cookie-' + username)
             if files is not None:
@@ -75,9 +77,10 @@ class Tester:
                 json_str = await self.compile_parametrized_string(json.dumps(params))
                 response = s.post(url, json_str) if params is not None else s.get(url)
         self._previous_response = response
-        print(url, json_str, response.status_code)
+        print(colored(url, "green"), colored(json_str, "yellow"), colored(response.status_code, "green"))
         if self.verbose:
-            print(response.headers, response.content)
+            print(colored("Response headers", "green"), response.headers)
+            print(colored("Response content", "green"), response.content)
         return response
 
     async def login(self, username, password, auth_method):
@@ -100,7 +103,7 @@ class Tester:
             return False
 
     async def task(self, username, password, auth_method, url, params, files, count):
-        print("Call " + url + " by user '" + username + "'")
+        print(colored("Call " + url + " by user '" + username + "'", "yellow"))
         url = await self.compile_parametrized_string(url)
         s = requests.Session()
         s.cookies = await self.load_cookies('cookie-' + username)

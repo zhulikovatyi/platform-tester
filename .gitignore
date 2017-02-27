@@ -138,5 +138,6 @@ ENV/
 
 cookie-*
 *.iml
+*.json
 task_plan.json
 credentials

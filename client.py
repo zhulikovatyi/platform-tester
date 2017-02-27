@@ -7,6 +7,8 @@ import asyncio
 import json
 import argparse
 import re
+import logging
+import http.client as http_client
 from termcolor import colored
 
 
@@ -18,16 +20,25 @@ class Tester:
     task_plan_file = None
     task_specification = None
     verbose = None
+    secure = None
     _previous_response = None
 
     def __init__(self, args):
         self.clear_cache = args.clear
         self.verbose = args.verbose
+        if self.verbose:
+            http_client.HTTPConnection.debuglevel = 1
+            logging.basicConfig()
+            logging.getLogger().setLevel(logging.DEBUG)
+            requests_log = logging.getLogger("requests.packages.urllib3")
+            requests_log.setLevel(logging.DEBUG)
+            requests_log.propagate = True
         self.host = args.host
         self.port = args.port
         self.task_plan_file = args.task_plan
         self.task_specification = json.loads(open(self.task_plan_file).read())
-        self.app_url = "http://" + self.host + ":" + self.port
+        self.secure = args.secure
+        self.app_url = ("http://" if not self.secure else "https://") + self.host + ":" + self.port
 
     @staticmethod
     async def save_cookies(cookie_jar, filename):
@@ -56,12 +67,13 @@ class Tester:
             for f in files:
                 fls['file_' + str(++i)] = open(f, 'rb')
             del s.headers["Content-Type"]
+            json_str = ""
             response = s.post(url, data=params, files=fls)
         else:
             json_str = await self.compile_parametrized_string(json.dumps(params))
             response = s.post(url, json_str) if params is not None else s.get(url)
         if response.status_code == 401:
-            print(colored("Invalid session detected", "red", None, attrs=["bold"]),
+            print("\n", colored("Invalid session detected", "red", None, attrs=["bold"]),
                   colored(response.content, "red", None, attrs=["bold"]))
             await asyncio.wait([self.login(username, password, auth_method)])
             s.cookies = await self.load_cookies('cookie-' + username)
@@ -77,7 +89,7 @@ class Tester:
                 json_str = await self.compile_parametrized_string(json.dumps(params))
                 response = s.post(url, json_str) if params is not None else s.get(url)
         self._previous_response = response
-        print(colored(url, "green"), colored(json_str, "yellow"), colored(response.status_code, "green"))
+        print("\n", colored(url, "green"), colored(json_str, "yellow"), colored(response.status_code, "green"))
         if self.verbose:
             print(colored("Response headers", "green"), response.headers)
             print(colored("Response content", "green"), response.content)
@@ -147,6 +159,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', dest='clear', action='store_true')
     parser.add_argument('-v', dest='verbose', action='store_true')
+    parser.add_argument('-s', dest='secure', action='store_true')
     parser.add_argument('--host', dest='host')
     parser.add_argument('--port', dest='port')
     parser.add_argument("--task-plan", dest='task_plan')

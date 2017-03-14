@@ -3,4 +3,3 @@ asyncio
 argparse
 aiohttp
 termcolor
-logging

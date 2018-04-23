@@ -150,7 +150,7 @@ class Tester:
             print("Finish clean cache")
         await asyncio.wait([
                                self.task_for_user(
-                                   line.strip().split(":")[0], line.strip().split(":")[1], line.strip().split(":")[2]
+                                   line.strip().split(":")[0], line.strip().split(":")[1], int(line.strip().split(":")[2])
                                ) for line in sys.stdin
                                ])
 
